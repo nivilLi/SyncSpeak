@@ -33,3 +33,7 @@ server/test/pipeline-output.mp3
 
 # Claude commands/skills (internal tooling)
 .claude/
+
+# Project meta files (local use only)
+TODO.md
+CLAUDE.md

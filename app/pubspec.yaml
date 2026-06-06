@@ -14,7 +14,7 @@ dependencies:
   web_socket_channel: ^2.4.0
 
   # 麦克风采集
-  record: ^5.1.2
+  record: ^7.0.0
 
   # 音频播放
   just_audio: ^0.9.40
