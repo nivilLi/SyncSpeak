@@ -1,0 +1,15 @@
+{
+  "name": "simultaneous-interpretation-server",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.0",
+    "openai": "^4.104.0",
+    "uuid": "^11.0.0",
+    "ws": "^8.18.0"
+  }
+}

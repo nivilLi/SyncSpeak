@@ -1,0 +1,35 @@
+# macOS
+.DS_Store
+
+# Node.js
+server/node_modules/
+server/.env
+
+# Flutter build artifacts
+app/build/
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/android/.gradle/
+app/android/app/build/
+app/android/local.properties
+app/ios/.symlinks/
+app/ios/Flutter/ephemeral/
+app/ios/Flutter/Generated.xcconfig
+app/ios/Flutter/flutter_export_environment.sh
+app/ios/Pods/
+app/ios/Runner/GeneratedPluginRegistrant.h
+app/ios/Runner/GeneratedPluginRegistrant.m
+app/ios/Runner.xcworkspace/
+
+# Flutter generated
+app/android/app/src/main/java/io/flutter/plugins/
+
+# Test outputs
+server/test/*.mp3
+server/test/*.wav
+server/test/output*.mp3
+server/test/pipeline-output.mp3
+
+# Claude commands/skills (internal tooling)
+.claude/

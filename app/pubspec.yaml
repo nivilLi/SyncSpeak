@@ -1,0 +1,39 @@
+name: simultaneous_interpretation
+description: 中英双向实时同声传译 App
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # WebSocket
+  web_socket_channel: ^2.4.0
+
+  # 麦克风采集
+  record: ^5.1.2
+
+  # 音频播放
+  just_audio: ^0.9.40
+
+  # 状态管理
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # 工具
+  permission_handler: ^11.3.1
+  path_provider: ^2.1.3
+  uuid: ^4.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+  build_runner: ^2.4.9
+  riverpod_generator: ^2.4.0
+
+flutter:
+  uses-material-design: true
