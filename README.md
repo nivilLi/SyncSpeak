@@ -60,18 +60,32 @@ simultaneousInterpretation/
 │   │       └── logger.js          # 日志工具
 │   ├── .env.example
 │   └── package.json
-└── app/                           # Flutter 前端
-    ├── lib/
-    │   ├── main.dart
-    │   ├── config.dart              # WS 地址配置
-    │   ├── models/app_state.dart
-    │   ├── providers/               # Riverpod 状态管理
-    │   ├── services/                # WebSocket / 麦克风 / 音频播放
-    │   ├── screens/                 # 主界面
-    │   └── widgets/                 # 字幕面板 / 声波动画 / 控制按钮
-    ├── android/
-    ├── ios/
-    └── pubspec.yaml
+├── app/                           # Flutter 前端（iOS / Android）
+│   ├── lib/
+│   │   ├── main.dart
+│   │   ├── config.dart              # WS 地址配置
+│   │   ├── models/app_state.dart
+│   │   ├── providers/               # Riverpod 状态管理
+│   │   ├── services/                # WebSocket / 麦克风 / 音频播放
+│   │   ├── screens/                 # 主界面
+│   │   └── widgets/                 # 字幕面板 / 声波动画 / 控制按钮
+│   ├── android/
+│   ├── ios/
+│   └── pubspec.yaml
+└── web/                           # Web 前端（Vue 3 + Vite + Naive UI）
+    ├── index.html
+    ├── package.json
+    ├── vite.config.js
+    └── src/
+        ├── App.vue                  # 根组件（布局 + 状态）
+        ├── composables/
+        │   ├── useWebSocket.js      # WebSocket 连接管理
+        │   ├── useAudioCapture.js   # 麦克风采集（16kHz PCM）
+        │   └── useAudioPlayer.js    # TTS MP3 队列播放
+        └── components/
+            ├── SubtitlePanel.vue    # 字幕区（历史渐小渐淡）
+            ├── WaveformDivider.vue  # 声波分隔线动画
+            └── ControlBar.vue      # 底部控制栏
 ```
 
 ## 关键抽象
@@ -123,6 +137,7 @@ npm run dev            # 启动（node --watch 热重载）
 
 ## 前端运行
 
+**Flutter（iOS / Android）**
 ```bash
 cd app
 flutter pub get
@@ -130,9 +145,19 @@ flutter pub get
 flutter run --dart-define=WS_URL=ws://<Mac局域网IP>:3000
 ```
 
+**Web（Chrome）**
+```bash
+cd web
+npm install
+npm run dev
+# 浏览器访问 http://localhost:5173
+# 修改 src/composables/useWebSocket.js 顶部 WS_URL 指向服务端
+```
+
 ## 当前状态
 
 - ✅ 后端完整管道（ASR → 翻译 → TTS）联调通过
 - ✅ Flutter Android 真机测试通过
+- ✅ Web 端（Chrome）测试通过
 - 🚧 iOS 待测试
 - 🚧 服务端云部署
