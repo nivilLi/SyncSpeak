@@ -1,6 +1,6 @@
-# Simultaneous Interpretation Assistant
+# SyncSpeak — 同声传译助手
 
-中英双向实时同声传译应用，Flutter 前端 + Node.js 后端。
+中英双向实时同声传译应用，Flutter（iOS/Android）+ Node.js 后端 + 阿里云语音 API。
 
 ## 架构总览
 
@@ -24,8 +24,8 @@
                         │
          ┌──────────────┼──────────────┐
          ▼              ▼              ▼
-   阿里云百炼        Anthropic      阿里云百炼
-   FunASR ASR      Claude Haiku    CosyVoice TTS
+            阿里云百炼（DASHSCOPE_API_KEY 统一鉴权）
+   FunASR ASR      Qwen-MT Flash   CosyVoice TTS
 ```
 
 ## 数据流
@@ -60,7 +60,18 @@ simultaneousInterpretation/
 │   │       └── logger.js          # 日志工具
 │   ├── .env.example
 │   └── package.json
-└── app/                           # Flutter 前端（待开发）
+└── app/                           # Flutter 前端
+    ├── lib/
+    │   ├── main.dart
+    │   ├── config.dart              # WS 地址配置
+    │   ├── models/app_state.dart
+    │   ├── providers/               # Riverpod 状态管理
+    │   ├── services/                # WebSocket / 麦克风 / 音频播放
+    │   ├── screens/                 # 主界面
+    │   └── widgets/                 # 字幕面板 / 声波动画 / 控制按钮
+    ├── android/
+    ├── ios/
+    └── pubspec.yaml
 ```
 
 ## 关键抽象
@@ -70,7 +81,7 @@ simultaneousInterpretation/
 | `DashscopeWsClient` | 阿里云 WebSocket 基类：连接、认证、task 生命周期 |
 | `AsrService` | 继承基类，封装 FunASR 流式识别，回调 partial/final |
 | `TtsService` | 继承基类，封装 CosyVoice 流式合成，接收二进制音频帧 |
-| `TranslationService` | Claude Haiku 流式翻译，滑动上下文窗口保持连贯 |
+| `TranslationService` | Qwen-MT Flash 流式翻译，OpenAI 兼容接口 |
 | `InterpretPipeline` | 串联三个服务，管理 TTS 音频队列顺序，对外暴露简洁接口 |
 
 ## WebSocket 协议（Server ↔ Flutter）
@@ -106,7 +117,22 @@ npm run dev            # 启动（node --watch 热重载）
 
 | 变量 | 说明 |
 |------|------|
-| `DASHSCOPE_API_KEY` | 阿里云百炼 API Key |
-| `ANTHROPIC_API_KEY` | Anthropic API Key |
+| `DASHSCOPE_API_KEY` | 阿里云百炼 API Key（ASR + 翻译 + TTS 共用） |
 | `PORT` | 服务端口，默认 3000 |
 | `LOG_LEVEL` | 日志级别 debug/info/warn/error，默认 info |
+
+## 前端运行
+
+```bash
+cd app
+flutter pub get
+# 连接真机后
+flutter run --dart-define=WS_URL=ws://<Mac局域网IP>:3000
+```
+
+## 当前状态
+
+- ✅ 后端完整管道（ASR → 翻译 → TTS）联调通过
+- ✅ Flutter Android 真机测试通过
+- 🚧 iOS 待测试
+- 🚧 服务端云部署
