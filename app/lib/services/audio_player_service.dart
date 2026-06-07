@@ -6,60 +6,56 @@ import 'package:just_audio/just_audio.dart';
 import 'package:path_provider/path_provider.dart';
 
 /// TTS 音频播放服务
-/// 接收 MP3 二进制块，写入临时文件后顺序播放
+/// 接收 MP3 二进制块，通过 ConcatenatingAudioSource 无缝排队播放，
+/// 避免每块都执行 setFilePath 导致的 150-450ms 解码器初始化延迟。
 class AudioPlayerService {
   final AudioPlayer _player = AudioPlayer();
-  final List<Uint8List> _queue = [];
-  bool _isPlaying = false;
+  ConcatenatingAudioSource? _playlist;
+  bool _isStarted = false;
   int _fileCounter = 0;
 
-  bool get isPlaying => _isPlaying;
+  bool get isPlaying => _isStarted;
 
-  /// 将 MP3 音频块加入播放队列
-  void enqueue(Uint8List mp3Data) {
-    _queue.add(mp3Data);
-    if (!_isPlaying) {
-      _playNext();
+  /// 将 MP3 音频块写入临时文件并追加到播放列表
+  Future<void> enqueue(Uint8List mp3Data) async {
+    final tempDir = await getTemporaryDirectory();
+    final file = File('${tempDir.path}/tts_${_fileCounter++}.mp3');
+    await file.writeAsBytes(mp3Data);
+
+    final source = AudioSource.file(file.path);
+
+    if (!_isStarted || _playlist == null) {
+      // 首块：新建 playlist，setAudioSource 后立即播放
+      _playlist = ConcatenatingAudioSource(children: [source]);
+      _isStarted = true;
+      await _player.setAudioSource(_playlist!);
+      _player.play(); // 不 await，让播放与后续入队并发进行
+
+      // 播放完毕后重置状态，以便下次 enqueue 重新 setAudioSource
+      _player.playerStateStream
+          .where((s) => s.processingState == ProcessingState.completed)
+          .first
+          .then((_) {
+        _isStarted = false;
+        _playlist = null;
+      }).catchError((_) {});
+    } else {
+      // 后续块：直接追加，just_audio 自动无缝衔接
+      await _playlist!.add(source);
     }
+
+    // 播放完后异步删除临时文件
+    _player.playerStateStream
+        .where((s) => s.processingState == ProcessingState.completed)
+        .first
+        .then((_) => file.delete())
+        .catchError((_) => file);
   }
 
-  Future<void> _playNext() async {
-    if (_queue.isEmpty) {
-      _isPlaying = false;
-      return;
-    }
-
-    _isPlaying = true;
-    final data = _queue.removeAt(0);
-
-    try {
-      final tempDir = await getTemporaryDirectory();
-      final file = File('${tempDir.path}/tts_${_fileCounter++}.mp3');
-      await file.writeAsBytes(data);
-
-      await _player.setFilePath(file.path);
-      await _player.play();
-
-      // 等待播放完毕
-      await _player.playerStateStream.firstWhere(
-        (state) =>
-            state.processingState == ProcessingState.completed ||
-            state.processingState == ProcessingState.idle,
-      );
-
-      // 清理临时文件（异步，不阻塞）
-      file.delete().catchError((_) => file);
-    } catch (_) {
-      // 播放失败时继续下一段
-    }
-
-    _playNext();
-  }
-
-  /// 清空队列并停止播放
+  /// 清空队列并停止播放；重置状态以便下次重新 setAudioSource
   Future<void> stop() async {
-    _queue.clear();
-    _isPlaying = false;
+    _isStarted = false;
+    _playlist = null;
     await _player.stop();
   }
 
