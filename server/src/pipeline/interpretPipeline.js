@@ -20,6 +20,9 @@ import { createLogger } from '../utils/logger.js';
 
 const logger = createLogger('Pipeline');
 
+// 翻译 token 流按标点分片的分隔符
+const PHRASE_SPLIT_RE = /([，。！？,.!?])/;
+
 // 检测文本语言（简单规则：含中文字符则为中文）
 function detectLang(text) {
   return /[一-龥]/.test(text) ? 'zh' : 'en';
@@ -33,6 +36,7 @@ export class InterpretPipeline {
   #callbacks;
   #running = false;
   #ttsQueue = Promise.resolve();  // 串行化 TTS 任务，避免音频乱序
+  #nextTts = null;                // lookahead：下一个 TTS 实例（已 connect+startTask）
 
   /**
    * @param {{
@@ -99,7 +103,23 @@ export class InterpretPipeline {
     // 2. 等待所有翻译+TTS 任务完成（#ttsQueue 已被 final 回调更新）
     await this.#ttsQueue.catch(() => {});
 
+    // 3. 若 lookahead TTS 实例未被用到，关闭它
+    if (this.#nextTts) {
+      const pending = this.#nextTts;
+      this.#nextTts = null;
+      pending.then(t => t.close()).catch(() => {});
+    }
+
     logger.info('Pipeline stopped');
+  }
+
+  // 新建一个 TTS 实例并完成握手，返回 Promise<TtsService>
+  #createReadyTts() {
+    const tts = new TtsService(this.#dashscopeApiKey, {
+      voice: this.#tgtLang === 'zh' ? TTS_VOICES.zh : TTS_VOICES.en,
+      onAudio: this.#callbacks.onAudio,
+    });
+    return tts.connect().then(() => tts.startTask()).then(() => tts);
   }
 
   #handleFinalText(text, srcLang, tgtLang) {
@@ -110,22 +130,45 @@ export class InterpretPipeline {
     // 串行化：上一段 TTS 结束后再处理下一段，保证音频顺序
     this.#ttsQueue = this.#ttsQueue.then(async () => {
       try {
-        // 1. 翻译
+        // lookahead：消费预建连接（若存在），同时立即开始建立下一个
+        const ttsPromise = this.#nextTts ?? this.#createReadyTts();
+        this.#nextTts = this.#createReadyTts();
+
+        let pendingPhrase = '';
+
+        // 翻译 token 流到达时按标点分片，立即 sendText，不等全句完成
         const translated = await this.#translator.translateStream(
           text, detectedSrc, target,
-          (chunk) => this.#callbacks.onTranslation(chunk),
-        );
-        const clean = translated.replace(/[—–]/g, '-').trim();
-        if (!clean) return;
+          async (chunk) => {
+            this.#callbacks.onTranslation(chunk);
+            pendingPhrase += chunk;
 
-        // 2. 每句话新建 TTS task（避免 CosyVoice 空闲超时问题）
-        const tts = new TtsService(this.#dashscopeApiKey, {
-          voice: this.#tgtLang === 'zh' ? TTS_VOICES.zh : TTS_VOICES.en,
-          onAudio: this.#callbacks.onAudio,
-        });
-        await tts.connect();
-        await tts.startTask();
-        tts.sendText(clean);
+            // 按标点切分，每个完整短语立即送入 TTS
+            const parts = pendingPhrase.split(PHRASE_SPLIT_RE);
+            // split 含捕获组：[phrase, delimiter, phrase, delimiter, ...]
+            // 最后一段（不含标点）留作下次拼接
+            pendingPhrase = parts[parts.length - 1];
+
+            if (parts.length > 1) {
+              const tts = await ttsPromise;
+              // 将所有完整短语（含跟随的标点）合并后送入
+              const toSend = parts.slice(0, -1).join('');
+              if (toSend.trim()) tts.sendText(toSend);
+            }
+          },
+        );
+
+        const tts = await ttsPromise;
+
+        // 翻译结束后 pendingPhrase 保存最后一段未带标点的尾部文字
+        const clean = translated.replace(/[—–]/g, '-').trim();
+        if (!clean) {
+          tts.close();
+          return;
+        }
+
+        if (pendingPhrase.trim()) tts.sendText(pendingPhrase.trim());
+
         await tts.finishTask();
         tts.close();
       } catch (err) {

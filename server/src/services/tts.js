@@ -22,11 +22,17 @@ const MODELS = {
   cosyvoiceFlash: 'cosyvoice-v3-flash',
 };
 
+const FLUSH_SIZE_BYTES = 40 * 1024;  // 40KB
+const FLUSH_INTERVAL_MS = 100;
+
 export class TtsService extends DashscopeWsClient {
   #onAudio;
   #onDone;
   #voice;
   #model;
+  #audioChunks = [];
+  #audioBufferedBytes = 0;
+  #flushTimer = null;
 
   /**
    * @param {string} apiKey
@@ -65,13 +71,35 @@ export class TtsService extends DashscopeWsClient {
     };
   }
 
-  // 接收二进制音频帧，直接转发给调用方
   onBinary(buffer) {
-    this.#onAudio(buffer);
+    this.#audioChunks.push(buffer);
+    this.#audioBufferedBytes += buffer.length;
+
+    if (this.#audioBufferedBytes >= FLUSH_SIZE_BYTES) {
+      this.#flushAudio();
+      return;
+    }
+
+    if (!this.#flushTimer) {
+      this.#flushTimer = setTimeout(() => this.#flushAudio(), FLUSH_INTERVAL_MS);
+    }
+  }
+
+  #flushAudio() {
+    if (this.#flushTimer) {
+      clearTimeout(this.#flushTimer);
+      this.#flushTimer = null;
+    }
+    if (this.#audioChunks.length === 0) return;
+    const merged = Buffer.concat(this.#audioChunks);
+    this.#audioChunks = [];
+    this.#audioBufferedBytes = 0;
+    this.#onAudio(merged);
   }
 
   onMessage(event, data) {
     if (event === 'task-finished') {
+      this.#flushAudio();
       this.#onDone();
     }
   }
@@ -81,6 +109,12 @@ export class TtsService extends DashscopeWsClient {
     this.sendContinue({
       payload: { input: { text } },
     });
+  }
+
+  // 覆盖基类 finishTask，等待完成前确保缓冲已 flush
+  async finishTask() {
+    await super.finishTask();
+    this.#flushAudio();
   }
 }
 
