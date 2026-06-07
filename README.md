@@ -2,6 +2,10 @@
 
 中英双向实时同声传译应用，Flutter（iOS/Android）+ Node.js 后端 + 阿里云语音 API。
 
+## 演示视频
+
+[📹 查看演示视频](https://pan.quark.cn/s/69e66bd3b3bc)
+
 ## 架构总览
 
 ```
